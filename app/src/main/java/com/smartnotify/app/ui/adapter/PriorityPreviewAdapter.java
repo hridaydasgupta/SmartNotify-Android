@@ -18,11 +18,11 @@ import java.util.List;
 
 public class PriorityPreviewAdapter extends RecyclerView.Adapter<PriorityPreviewAdapter.ViewHolder> {
 
-    private final List<String> appList;
+    private List<String> appList; // Isko non-final rakha hai taaki list update ho sake
     private final PackageManager packageManager;
     private final OnRemoveClickListener removeClickListener;
 
-    // 🔥 Naya Variable Edit Mode track karne ke liye
+    // 🔥 Edit Mode track karne ke liye
     private boolean isEditMode = false;
 
     public interface OnRemoveClickListener {
@@ -35,15 +35,22 @@ public class PriorityPreviewAdapter extends RecyclerView.Adapter<PriorityPreview
         this.removeClickListener = listener;
     }
 
-    // 🔥 Naya method Edit Mode on/off karne ke liye
+    // 🔥 Edit Mode on/off karne ke liye
     public void setEditMode(boolean editMode) {
         this.isEditMode = editMode;
         notifyDataSetChanged(); // List ko refresh karega taaki ❌ icons dikh/chhup jayein
     }
 
+    // 🔥 Safety method: Agar future mein puri list ek sath refresh karni ho
+    public void updateList(List<String> newList) {
+        this.appList = newList;
+        notifyDataSetChanged();
+    }
+
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        // Tumhara XML layout file
         View view = LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.item_priority_app_grid, parent, false);
         return new ViewHolder(view);
@@ -52,6 +59,7 @@ public class PriorityPreviewAdapter extends RecyclerView.Adapter<PriorityPreview
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         String packageName = appList.get(position);
+
         try {
             ApplicationInfo appInfo = packageManager.getApplicationInfo(packageName, 0);
             holder.imgAppIcon.setImageDrawable(packageManager.getApplicationIcon(appInfo));
@@ -83,7 +91,7 @@ public class PriorityPreviewAdapter extends RecyclerView.Adapter<PriorityPreview
 
     @Override
     public int getItemCount() {
-        return appList.size();
+        return appList != null ? appList.size() : 0;
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {

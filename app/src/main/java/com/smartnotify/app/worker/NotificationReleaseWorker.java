@@ -32,16 +32,22 @@ public class NotificationReleaseWorker extends Worker {
 
         Log.d("SmartNotify", "Worker Jag Gaya! Releasing notifications for priority: " + priorityLevel);
 
-        NotificationRepository repository = new NotificationRepository(getApplicationContext());
+        try {
+            NotificationRepository repository = new NotificationRepository(getApplicationContext());
 
-        // 1. Database se chhupaye hue ruki hui notifications uthao
-        List<NotificationEntity> pendingNotifications = repository.getPendingNotifications(priorityLevel);
+            // 1. Database se chhupaye hue ruki hui notifications uthao
+            List<NotificationEntity> pendingNotifications = repository.getPendingNotifications(priorityLevel);
 
-        // 2. Agar list khali nahi hai, toh Zero-Lag Delivery Engine start karo
-        if (!pendingNotifications.isEmpty()) {
-            NotificationHelper.deliverNotificationsZeroLag(getApplicationContext(), pendingNotifications, repository, priorityLevel);
+            // 2. Agar list khali nahi hai, toh Zero-Lag Delivery Engine start karo
+            if (pendingNotifications != null && !pendingNotifications.isEmpty()) {
+                NotificationHelper.deliverNotificationsZeroLag(getApplicationContext(), pendingNotifications, repository, priorityLevel);
+            }
+
+            return Result.success();
+
+        } catch (Exception e) {
+            Log.e("SmartNotify", "Error in NotificationReleaseWorker", e);
+            return Result.retry(); // Agar kuch fat gaya, toh OS isko thodi der baad wapas try karega
         }
-
-        return Result.success();
     }
 }

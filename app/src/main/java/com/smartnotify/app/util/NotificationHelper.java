@@ -2,7 +2,9 @@ package com.smartnotify.app.util;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
@@ -10,6 +12,7 @@ import android.os.Looper;
 
 import androidx.core.app.NotificationCompat;
 
+import com.smartnotify.app.R;
 import com.smartnotify.app.data.local.entity.NotificationEntity;
 import com.smartnotify.app.data.repository.NotificationRepository;
 
@@ -42,7 +45,6 @@ public class NotificationHelper {
         Handler handler = new Handler(Looper.getMainLooper());
 
         // 🚀 STEP 1: APP-WISE GROUPING LOGIC (Bundling) 🚀
-        // Yahan hum notifications ko unke packageName ke hisaab se ek group me daalenge
         Map<String, List<NotificationEntity>> groupedNotifications = new HashMap<>();
 
         for (NotificationEntity entity : pendingNotifications) {
@@ -56,14 +58,12 @@ public class NotificationHelper {
         int delayMillis = 0;
         int delayIncrement = 300; // Har App ke notification ke beech 300ms ka gap
 
-        // Ab hum individually nahi, balki grouped apps ke hisaab se loop chalayenge
         for (Map.Entry<String, List<NotificationEntity>> entry : groupedNotifications.entrySet()) {
             String packageName = entry.getKey();
             List<NotificationEntity> appNotifs = entry.getValue();
 
             handler.postDelayed(() -> {
 
-                // App ka actual naam nikalna (e.g., "WhatsApp", "Instagram")
                 String appName = "Unknown App";
                 try {
                     appName = pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString();
@@ -71,30 +71,46 @@ public class NotificationHelper {
                     e.printStackTrace();
                 }
 
+                // 🔥 CLICK KARNE PAR ORIGINAL APP KHOLNE KA LOGIC 🔥
+                Intent launchIntent = pm.getLaunchIntentForPackage(packageName);
+                PendingIntent pendingIntent = null;
+                if (launchIntent != null) {
+                    launchIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    // Android 12+ ke liye FLAG_IMMUTABLE zaroori hai
+                    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        flags |= PendingIntent.FLAG_IMMUTABLE;
+                    }
+                    pendingIntent = PendingIntent.getActivity(context, packageName.hashCode(), launchIntent, flags);
+                }
+
                 // Notification Builder setup
                 NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
-                        .setSmallIcon(android.R.drawable.ic_popup_reminder) // App me apni notification icon daal lena baad me
+                        .setSmallIcon(R.mipmap.ic_smart) // 🔥 Apna official icon laga diya 🔥
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setAutoCancel(true);
 
-                // Agar app ka sirf 1 notification hai, toh normal dikhao
+                // Agar Launch Intent mil gaya (jaise WhatsApp), toh set kar do
+                if (pendingIntent != null) {
+                    builder.setContentIntent(pendingIntent);
+                }
+
+                // Agar app ka sirf 1 notification hai
                 if (appNotifs.size() == 1) {
                     NotificationEntity singleNotif = appNotifs.get(0);
                     builder.setContentTitle(appName + ": " + singleNotif.title)
                             .setContentText(singleNotif.text);
                 }
-                // Agar ek hi app ke multiple notifications hain, toh BUNDLE banao (InboxStyle)
+                // Agar ek hi app ke multiple notifications hain
                 else {
                     NotificationCompat.InboxStyle inboxStyle = new NotificationCompat.InboxStyle();
                     inboxStyle.setBigContentTitle(appNotifs.size() + " new notifications from " + appName);
 
-                    // Max 5 lines dikhayenge taaki notification bohot lamba na ho jaye
                     int linesToShow = Math.min(appNotifs.size(), 5);
                     for (int i = 0; i < linesToShow; i++) {
                         inboxStyle.addLine(appNotifs.get(i).title + " - " + appNotifs.get(i).text);
                     }
 
-                    // Agar 5 se zyada hain, toh summary text dikha do
                     if (appNotifs.size() > 5) {
                         inboxStyle.setSummaryText("+" + (appNotifs.size() - 5) + " more messages");
                     }
@@ -104,15 +120,12 @@ public class NotificationHelper {
                             .setStyle(inboxStyle);
                 }
 
-                // Notification screen par push karna
-                // ID ke liye packageName ka hashcode use kar rahe hain, taaki same app ke purane bundle replace ho jayein
-                // 🚀 Android 13+ Runtime Permission Check 🚀
+                // Notification push karna
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     if (context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
                         notificationManager.notify(packageName.hashCode(), builder.build());
                     }
                 } else {
-                    // Android 12 aur usse purane versions ke liye directly push karo
                     notificationManager.notify(packageName.hashCode(), builder.build());
                 }
 

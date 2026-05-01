@@ -25,11 +25,19 @@ public interface AppDao {
     @Query("SELECT priority FROM app_priorities WHERE packageName = :pkgName LIMIT 1")
     int getAppPriority(String pkgName);
 
-    // 👇 NAYA CODE YAHAN ADD KIYA HAI 👇
     // Kisi specific priority wali saari apps ke package names nikalne ke liye
     @Query("SELECT packageName FROM app_priorities WHERE priority = :priorityLevel")
     List<String> getAppsByPriority(int priorityLevel);
-    // 👆 NAYA CODE YAHAN TAK HAI 👆
+
+    // 🚀 NAYE QUERIES (Repository aur ViewModel ke liye)
+
+    // ViewModel ke liye: Unassigned apps filter karne ke kaam aayega
+    @Query("SELECT packageName FROM app_priorities")
+    List<String> getAllAssignedPackages();
+
+    // Service ke O(1) Cache ke liye: Ek baar me saari priority laane ke kaam aayega
+    @Query("SELECT * FROM app_priorities")
+    List<AppPriorityEntity> getAllPriorities();
 
     // ===================================
     // BLOCKED NOTIFICATIONS QUERIES

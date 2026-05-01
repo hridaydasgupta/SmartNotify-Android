@@ -2,8 +2,10 @@ package com.smartnotify.app.ui.setup;
 
 import android.app.Application;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.drawable.Drawable;
 
 import androidx.annotation.NonNull;
 import androidx.lifecycle.AndroidViewModel;
@@ -15,6 +17,7 @@ import com.smartnotify.app.model.AppInfoModel;
 import com.smartnotify.app.util.PriorityConstants;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -30,6 +33,7 @@ public class PriorityViewModel extends AndroidViewModel {
     public PriorityViewModel(@NonNull Application application) {
         super(application);
         repository = new NotificationRepository(application);
+        // Single thread executor background tasks ke liye sahi hai
         executorService = Executors.newSingleThreadExecutor();
     }
 
@@ -42,46 +46,51 @@ public class PriorityViewModel extends AndroidViewModel {
             PackageManager pm = getApplication().getPackageManager();
             List<AppInfoModel> models = new ArrayList<>();
 
+            // 1. Database se saari assigned packages ek hi baar mein nikal lo (Optimization)
+            // Note: Iske liye Repository mein getAllAssignedPackageNames() method hona chahiye
+            Set<String> assignedPackages = new HashSet<>(repository.getAssignedPackageNamesSync());
+
             Intent intent = new Intent(Intent.ACTION_MAIN, null);
             intent.addCategory(Intent.CATEGORY_LAUNCHER);
             List<ResolveInfo> resolveInfos = pm.queryIntentActivities(intent, 0);
 
-            Set<String> addedPackages = new HashSet<>();
+            Set<String> processedPackages = new HashSet<>();
 
             for (ResolveInfo resolveInfo : resolveInfos) {
                 String pkgName = resolveInfo.activityInfo.packageName;
 
-                // Apni khud ki "Smart Notify" app ko list me mat dikhao
-                if (pkgName.equals(getApplication().getPackageName())) {
+                // Apni app aur already assigned apps ko skip karo
+                if (pkgName.equals(getApplication().getPackageName()) || assignedPackages.contains(pkgName)) {
                     continue;
                 }
 
-                if (!addedPackages.contains(pkgName)) {
-                    int savedPriority = repository.getAppPriority(pkgName);
+                if (!processedPackages.contains(pkgName)) {
+                    try {
+                        ApplicationInfo appInfo = pm.getApplicationInfo(pkgName, 0);
+                        String appLabel = pm.getApplicationLabel(appInfo).toString();
+                        Drawable icon = pm.getApplicationIcon(appInfo);
 
-                    if (savedPriority == PriorityConstants.UNASSIGNED) {
-                        try {
-                            // 🔥 FIX YAHAN HAI: Ab hum Activity nahi, balki original Application ki details nikalenge
-                            android.content.pm.ApplicationInfo appInfo = pm.getApplicationInfo(pkgName, 0);
-
-                            models.add(new AppInfoModel(
-                                    pkgName,
-                                    pm.getApplicationLabel(appInfo).toString(), // Original App Name (e.g., Google)
-                                    pm.getApplicationIcon(appInfo)              // Original App Icon
-                            ));
-                            addedPackages.add(pkgName);
-                        } catch (PackageManager.NameNotFoundException e) {
-                            e.printStackTrace();
-                        }
+                        models.add(new AppInfoModel(pkgName, appLabel, icon));
+                        processedPackages.add(pkgName);
+                    } catch (PackageManager.NameNotFoundException e) {
+                        e.printStackTrace();
                     }
                 }
             }
+
+            // 2. Alphabetical Sort: Taaki apps A to Z dikhein (Better UX)
+            Collections.sort(models, (a, b) -> a.getAppName().compareToIgnoreCase(b.getAppName()));
+
             unassignedApps.postValue(models);
         });
     }
 
     public void assignAppPriority(String packageName, int priority) {
-        repository.saveAppPriority(packageName, priority);
+        executorService.execute(() -> {
+            repository.saveAppPriority(packageName, priority);
+            // Assign karne ke baad list refresh karna zaroori hai
+            loadInstalledApps();
+        });
     }
 
     public NotificationRepository getRepository() {

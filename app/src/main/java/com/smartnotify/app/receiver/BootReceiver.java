@@ -12,24 +12,40 @@ public class BootReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
+        String action = intent.getAction();
+
         // Check karo ki intent sach me Phone Restart ka hi hai na
-        if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction()) ||
-                Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(intent.getAction())) {
+        if (Intent.ACTION_BOOT_COMPLETED.equals(action) ||
+                Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(action) ||
+                "android.intent.action.QUICKBOOT_POWERON".equals(action)) { // HTC/Samsung fast boot support
 
-            Log.d("SmartNotify_Boot", "Phone restarted! Alarms ko wapas zinda kar rahe hain...");
+            Log.d("SmartNotify_Boot", "Phone restarted! Waking up the Silent Guardian...");
 
-            // 🔥 FIX: Ab hum wahi UserPreferences use kar rahe hain jo tumne Setup Activity me banaya tha
             UserPreferences prefs = new UserPreferences(context);
 
-            // Database se Focus End Time aur Low Priority Start Time nikal lo
-            String focusEndTime = prefs.getFocusEndTime();
-            String lowWindowTime = prefs.getLowPriorityStartTime();
+            // 🚀 Safety Check: Agar Master Switch ON hai tabhi alarms lagao
+            if (prefs.isMasterSwitchActive()) {
 
-            // WorkScheduler ko wapas start kar do!
-            WorkScheduler.scheduleMediumPriorityRelease(context, focusEndTime);
-            WorkScheduler.scheduleLowPriorityRelease(context, lowWindowTime);
+                // Database se Focus End Time aur Low Priority Start Time nikal lo
+                String focusEndTime = prefs.getFocusEndTime();
+                String lowWindowTime = prefs.getLowPriorityStartTime();
 
-            Log.d("SmartNotify_Boot", "All background schedules restored successfully! Focus Ends: " + focusEndTime);
+                // 🔥 Null Check: Agar time properly set hai tabhi schedule karo
+                if (focusEndTime != null && !focusEndTime.isEmpty()) {
+                    WorkScheduler.scheduleMediumPriorityRelease(context, focusEndTime);
+                    Log.d("SmartNotify_Boot", "Medium Priority schedule restored for: " + focusEndTime);
+                }
+
+                if (lowWindowTime != null && !lowWindowTime.isEmpty()) {
+                    WorkScheduler.scheduleLowPriorityRelease(context, lowWindowTime);
+                    Log.d("SmartNotify_Boot", "Low Priority schedule restored for: " + lowWindowTime);
+                }
+
+                Log.d("SmartNotify_Boot", "All background schedules restored successfully!");
+
+            } else {
+                Log.d("SmartNotify_Boot", "Master Switch is OFF. Alarms not restored.");
+            }
         }
     }
 }

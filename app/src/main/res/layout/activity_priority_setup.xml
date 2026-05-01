@@ -40,11 +40,25 @@
                 android:gravity="center"
                 android:orientation="vertical">
 
-                <ImageView
-                    android:id="@+id/imgHighRing"
+                <RelativeLayout
                     android:layout_width="90dp"
-                    android:layout_height="90dp"
-                    android:src="@drawable/ring_high"/>
+                    android:layout_height="90dp">
+
+                    <ImageView
+                        android:id="@+id/imgHighRing"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/ring_high"/>
+
+                    <GridLayout
+                        android:id="@+id/gridHighPreview"
+                        android:layout_width="58dp"
+                        android:layout_height="58dp"
+                        android:layout_centerInParent="true"
+                        android:columnCount="3"
+                        android:rowCount="3"
+                        android:alignmentMode="alignBounds"/>
+                </RelativeLayout>
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -63,11 +77,25 @@
                 android:gravity="center"
                 android:orientation="vertical">
 
-                <ImageView
-                    android:id="@+id/imgMediumRing"
+                <RelativeLayout
                     android:layout_width="90dp"
-                    android:layout_height="90dp"
-                    android:src="@drawable/ring_medium"/>
+                    android:layout_height="90dp">
+
+                    <ImageView
+                        android:id="@+id/imgMediumRing"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/ring_medium"/>
+
+                    <GridLayout
+                        android:id="@+id/gridMediumPreview"
+                        android:layout_width="58dp"
+                        android:layout_height="58dp"
+                        android:layout_centerInParent="true"
+                        android:columnCount="3"
+                        android:rowCount="3"
+                        android:alignmentMode="alignBounds"/>
+                </RelativeLayout>
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -86,11 +114,25 @@
                 android:gravity="center"
                 android:orientation="vertical">
 
-                <ImageView
-                    android:id="@+id/imgLowRing"
+                <RelativeLayout
                     android:layout_width="90dp"
-                    android:layout_height="90dp"
-                    android:src="@drawable/ring_low"/>
+                    android:layout_height="90dp">
+
+                    <ImageView
+                        android:id="@+id/imgLowRing"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/ring_low"/>
+
+                    <GridLayout
+                        android:id="@+id/gridLowPreview"
+                        android:layout_width="58dp"
+                        android:layout_height="58dp"
+                        android:layout_centerInParent="true"
+                        android:columnCount="3"
+                        android:rowCount="3"
+                        android:alignmentMode="alignBounds"/>
+                </RelativeLayout>
 
                 <TextView
                     android:layout_width="wrap_content"

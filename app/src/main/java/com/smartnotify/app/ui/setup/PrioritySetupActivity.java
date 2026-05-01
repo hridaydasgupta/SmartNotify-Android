@@ -1,10 +1,22 @@
 package com.smartnotify.app.ui.setup;
 
 import android.app.TimePickerDialog;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.view.DragEvent;
 import android.view.View;
+import android.widget.GridLayout;
 import android.widget.ImageView;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -25,6 +37,8 @@ import com.smartnotify.app.worker.WorkScheduler;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class PrioritySetupActivity extends AppCompatActivity {
 
@@ -35,19 +49,39 @@ public class PrioritySetupActivity extends AppCompatActivity {
     private TextView tvFocusTime;
     private TextView tvLowPriorityTime;
 
+    // 🚀 GridLayouts for Icon Previews
+    private GridLayout gridHighPreview;
+    private GridLayout gridMediumPreview;
+    private GridLayout gridLowPreview;
+    private ExecutorService executor;
+    private Handler mainHandler;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_priority_setup);
 
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        // Notification Permission Check (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 101);
             }
         }
 
+        // 🚀 Battery Optimization Bypass Request (VIP Status)
+        requestBatteryOptimizationBypass();
+
+        // Threads Setup for Previews
+        executor = Executors.newSingleThreadExecutor();
+        mainHandler = new Handler(Looper.getMainLooper());
+
         // ViewModel setup
         viewModel = new ViewModelProvider(this).get(PriorityViewModel.class);
+
+        // UI Binding
+        gridHighPreview = findViewById(R.id.gridHighPreview);
+        gridMediumPreview = findViewById(R.id.gridMediumPreview);
+        gridLowPreview = findViewById(R.id.gridLowPreview);
 
         setupRecyclerView();
         setupDragAndDrop();
@@ -63,20 +97,90 @@ public class PrioritySetupActivity extends AppCompatActivity {
 
         // App start hote hi apps load karna shuru karo
         viewModel.loadInstalledApps();
+
+        // Initial load for Ring Previews
+        refreshAllRingPreviews();
+    }
+
+    // ===================================
+    // 🚀 NEW: RING PREVIEW ENGINE (Chhote Icons)
+    // ===================================
+    private void refreshAllRingPreviews() {
+        updateSingleRingPreview(PriorityConstants.HIGH, gridHighPreview);
+        updateSingleRingPreview(PriorityConstants.MEDIUM, gridMediumPreview);
+        updateSingleRingPreview(PriorityConstants.LOW, gridLowPreview);
+    }
+
+    private void updateSingleRingPreview(int priorityLevel, GridLayout gridLayout) {
+        executor.execute(() -> {
+            // Background thread mein DB hit aur icon fetch karo
+            List<String> assignedApps = viewModel.getRepository().getAppsByPriority(priorityLevel);
+            PackageManager pm = getPackageManager();
+
+            // Main UI thread par Views create karo
+            mainHandler.post(() -> {
+                gridLayout.removeAllViews(); // Purane icons hatao
+
+                // 🚀 UPDATE: Ab max 9 icons dikhayenge (3x3 grid)
+                int maxIcons = Math.min(assignedApps.size(), 9);
+
+                for (int i = 0; i < maxIcons; i++) {
+                    String packageName = assignedApps.get(i);
+                    try {
+                        Drawable icon = pm.getApplicationIcon(packageName);
+
+                        // Chhota ImageView banao
+                        ImageView imageView = new ImageView(this);
+                        imageView.setImageDrawable(icon);
+
+                        // 🚀 UPDATE: Icon size 16dp kar diya taaki 9 icons fit ho sakein
+                        GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+                        int sizeInPx = (int) (16 * getResources().getDisplayMetrics().density); // 16dp
+                        params.width = sizeInPx;
+                        params.height = sizeInPx;
+
+                        // Thoda sa gap taaki icons aapas mein na chipkein
+                        params.setMargins(2, 2, 2, 2);
+                        imageView.setLayoutParams(params);
+
+                        // Grid mein add kar do
+                        gridLayout.addView(imageView);
+
+                    } catch (PackageManager.NameNotFoundException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        });
+    }
+
+    // ===================================
+    // BATTERY OPTIMIZATION BYPASS LOGIC
+    // ===================================
+    private void requestBatteryOptimizationBypass() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            String packageName = getPackageName();
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+
+            if (pm != null && !pm.isIgnoringBatteryOptimizations(packageName)) {
+                Intent intent = new Intent();
+                intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + packageName));
+                startActivity(intent);
+            }
+        }
     }
 
     private void setupRecyclerView() {
         RecyclerView rvUnassignedApps = findViewById(R.id.rvUnassignedApps);
         rvUnassignedApps.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
 
-        // Tumhara purana adapter class idhar connect hoga
         adapter = new UnassignedAppsAdapter(unassignedList, app -> {
             // Normal click event (if needed in future)
         });
         rvUnassignedApps.setAdapter(adapter);
     }
 
-    // Yeh check karega ki agar pop-up pehle se screen par hai, toh dusra mat kholo
     private void showDialogIfSafe(int priority) {
         if (getSupportFragmentManager().findFragmentByTag("PriorityPreviewDialog") == null) {
             PriorityPreviewDialog.show(getSupportFragmentManager(), priority);
@@ -84,16 +188,24 @@ public class PrioritySetupActivity extends AppCompatActivity {
     }
 
     private void setupRingClicks() {
+        // Ab clicks hum Ring Image par nahi, poore container/grid par layange taaki easy to click ho
         findViewById(R.id.imgHighRing).setOnClickListener(v -> showDialogIfSafe(PriorityConstants.HIGH));
         findViewById(R.id.imgMediumRing).setOnClickListener(v -> showDialogIfSafe(PriorityConstants.MEDIUM));
         findViewById(R.id.imgLowRing).setOnClickListener(v -> showDialogIfSafe(PriorityConstants.LOW));
+
+        // Agar user chhote icons (Grid) par click kare, tab bhi dialog khulna chahiye
+        gridHighPreview.setOnClickListener(v -> showDialogIfSafe(PriorityConstants.HIGH));
+        gridMediumPreview.setOnClickListener(v -> showDialogIfSafe(PriorityConstants.MEDIUM));
+        gridLowPreview.setOnClickListener(v -> showDialogIfSafe(PriorityConstants.LOW));
     }
 
-    // Yeh ek naya function hai jo Dialog band hone par Unassigned List ko wapas refresh karega
+    // Ye function Dialog se bhi call hoga jab koi app remove hogi
     public void refreshUnassignedApps() {
         if (viewModel != null) {
             viewModel.loadInstalledApps();
         }
+        // Saath mein rings bhi update honi chahiye
+        refreshAllRingPreviews();
     }
 
     private void setupDragAndDrop() {
@@ -123,9 +235,16 @@ public class PrioritySetupActivity extends AppCompatActivity {
                     // Database me save karo
                     viewModel.assignAppPriority(app.getPackageName(), priority);
 
+                    // 🚀 The Missing Link: Broadcast to update O(1) Cache in Service
+                    Intent updateCacheIntent = new Intent("com.smartnotify.CACHE_UPDATE");
+                    sendBroadcast(updateCacheIntent);
+
                     // UI se hata do instantly
                     unassignedList.remove(app);
                     adapter.notifyDataSetChanged();
+
+                    // 🚀 Naya icon ring mein update karo
+                    refreshAllRingPreviews();
 
                     Toast.makeText(this, app.getAppName() + " assigned!", Toast.LENGTH_SHORT).show();
                     return true;
@@ -210,8 +329,32 @@ public class PrioritySetupActivity extends AppCompatActivity {
         tv.setText(formattedStart + " to " + formattedEnd);
     }
 
-
     interface TimePickerCallback {
         void onTimeSelected(int hour, int minute);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        checkBatteryPermissionStatus();
+    }
+
+    private void checkBatteryPermissionStatus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            String packageName = getPackageName();
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+
+            if (pm != null && !pm.isIgnoringBatteryOptimizations(packageName)) {
+                Toast.makeText(this, "⚠️ Warning: App may stop working in background. Please allow battery bypass.", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (executor != null && !executor.isShutdown()) {
+            executor.shutdown();
+        }
     }
 }
