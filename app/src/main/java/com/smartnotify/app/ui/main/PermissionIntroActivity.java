@@ -6,6 +6,7 @@ import android.provider.Settings;
 import android.widget.Button;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.AppCompatButton;
 
 import com.smartnotify.app.R;
 import com.smartnotify.app.ui.setup.PrioritySetupActivity;
@@ -18,7 +19,7 @@ public class PermissionIntroActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_permission_intro);
 
-        Button btnGrant = findViewById(R.id.btnContinue);
+        AppCompatButton btnGrant = findViewById(R.id.btnContinue);
 
         // Button click hone par user ko direct Android ki "Notification Access" setting me bhej do
         btnGrant.setOnClickListener(v -> {
